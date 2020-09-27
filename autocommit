@@ -20,9 +20,8 @@ function main {
     while read timestamp file; do
         file="${file#$source_dir/}"
 
-        # skip changes to the git repo or anything already ignored
+        # skip changes to the git repo
         [[ "$file" == .git/* ]] && continue
-        [ -z "$(git status --porcelain | grep "$file")" ] && continue
 
         # skip multiple file notifications that have already been processed
         if [ $last_copy -gt $timestamp ]; then
