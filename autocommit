@@ -5,6 +5,7 @@ set -eu
 latency=4.0
 remote=origin
 branch=main
+verbose=0
 
 
 function main {
@@ -23,13 +24,13 @@ function main {
         [[ "$file" == .git/* ]] && continue
         [ -z "$(git status --porcelain | grep "$file")" ] && continue
 
-        # skip queued notifications that have already been processed
+        # skip multiple file notifications that have already been processed
         if [ $last_copy -gt $timestamp ]; then
-            status "(old) $file"
+            status "(old) $file" verbose
             continue
+        else
+            status "changed $file" verbose
         fi
-
-        status "$file changed"
 
         [ -n "$repo_dir" ] && copy_files_to_repo
         commit_changes
@@ -93,19 +94,27 @@ function status {
     local bold="\e[1m"
     local green="\e[32m"
     local reset="\e[0m"
-    printf "${bold}== ${green}${1}${reset}\n"
+    local text="$1"
+    local is_verbose="${2:-}"
+
+    if [ -n "$is_verbose" ]; then
+        [ $verbose != 1 ] || echo "-- $text"
+    else
+        printf "${bold}== ${green}${text}${reset}\n"
+    fi
 }
 
 function pushd_silent {
     pushd "$1" >/dev/null
 }
 
-while getopts "b:hl:r:" option; do
+while getopts "b:hl:r:v" option; do
     case $option in
         b)  branch=$OPTARG ;;
         h)  exec perldoc -T $0 ;;
         l)  latency=$OPTARG ;;
         r)  remote=$OPTARG ;;
+        v)  verbose=1 ;;
     esac
 done
 shift $(( OPTIND -1 ))
@@ -126,7 +135,7 @@ B<autogit> - git commit and push directory changes
 
 =head1 SYNOPSIS
 
-B<autogit> [-h] [-b branch] [-l latency] [-r remote] source_dir [repo_dir]
+B<autogit> [-h] [-b branch] [-l latency] [-r remote] [-v] source_dir [repo_dir]
 
 Watch I<source_dir> for changes, optionally copy them to I<repo_dir>, 
 then commit them to git and push to a remote.
@@ -153,5 +162,9 @@ binary files).
 =item B<-r> I<remote>
 
 use I<remote> as the remote target to push to. Defaults to C<origin>.
+
+=item B<-v>
+
+be more verbose about file changes, even when ignored
 
 =back

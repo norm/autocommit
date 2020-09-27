@@ -41,3 +41,7 @@ though I also sync them to [Simplenote][sn]).
 * -r *remote*
 
     use *remote* as the remote target to push to. Defaults to `origin`.
+
+* -v
+
+    be more verbose about file changes, even when they are ignored
