@@ -31,16 +31,13 @@ though I also sync them to [Simplenote][sn]).
 
     use *branch* as the remote branch to push to. Defaults to `main`.
 
+* -l *seconds*
+
+    use I<seconds> as the latency for fswatch (how long between batches of
+    notifications). Default is 4.0. Larger values are useful when multiple
+    sizeable files are changed as part of a single operation (eg saving
+    binary files).
+
 * -r *remote*
 
     use *remote* as the remote target to push to. Defaults to `origin`.
-
-* -s *seconds*
-
-    sleep for *seconds* before trying to copy/commit. Defaults to 10.
-    Set to 0 if not desired.
-
-    Using this allows multiple changes happening in short succession to
-    be bundled into one commit. For example, an application that changes
-    multiple files as part of a save operation, but takes a few seconds
-    before complete.

@@ -2,7 +2,7 @@
 
 set -eu
 
-sleep_before_commit=10
+latency=4.0
 remote=origin
 branch=main
 
@@ -31,15 +31,11 @@ function main {
 
         status "$file changed"
 
-        # there may be multiple file changes happening, 
-        # allow them to complete before committing
-        sleep $sleep_before_commit
-
         [ -n "$repo_dir" ] && copy_files_to_repo
         commit_changes
 
         last_copy=$(date +%s)
-    done < <( fswatch -tf'%s' "$source_dir" )
+    done < <( fswatch -tf'%s' --latency 30.0 "$source_dir" )
 }
 
 function check_for_tools {
@@ -104,12 +100,12 @@ function pushd_silent {
     pushd "$1" >/dev/null
 }
 
-while getopts "b:hr:s:" option; do
+while getopts "b:hl:r:" option; do
     case $option in
         b)  branch=$OPTARG ;;
         h)  exec perldoc -T $0 ;;
+        l)  latency=$OPTARG ;;
         r)  remote=$OPTARG ;;
-        s)  sleep_before_commit="$OPTARG" ;;
     esac
 done
 shift $(( OPTIND -1 ))
@@ -130,7 +126,7 @@ B<autogit> - git commit and push directory changes
 
 =head1 SYNOPSIS
 
-B<autogit> [-h] [-b branch] [-r remote] [-s sleep] source_dir [repo_dir]
+B<autogit> [-h] [-b branch] [-l latency] [-r remote] source_dir [repo_dir]
 
 Watch I<source_dir> for changes, optionally copy them to I<repo_dir>, 
 then commit them to git and push to a remote.
@@ -147,17 +143,15 @@ print full help text
 
 use I<branch> as the remote branch to push to. Defaults to C<main>.
 
+=item B<-l> I<latency>
+
+use I<latency> as the latency for fswatch (how long between batches of
+notifications). Default is 4.0. Larger values are useful when multiple
+sizeable files are changed as part of a single operation (eg saving
+binary files).
+
 =item B<-r> I<remote>
 
 use I<remote> as the remote target to push to. Defaults to C<origin>.
-
-=item B<-s> I<seconds>
-
-sleep for I<seconds> before trying to copy/commit. Defaults to C<10>.
-Set to C<0> if not desired.
-
-Using this allows multiple changes happening in short succession to be bundled
-into one commit. For example, an application that changes multiple files as
-part of a save operation, but takes a few seconds before complete.
 
 =back
