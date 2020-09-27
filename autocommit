@@ -1,0 +1,163 @@
+#!/bin/bash
+
+set -eu
+
+sleep_before_commit=10
+remote=origin
+branch=main
+
+
+function main {
+    local last_copy=0
+
+    check_for_tools
+
+    using="${repo_dir:=$source_dir}"
+    pushd_silent "$using"
+    check_is_repo
+
+    while read timestamp file; do
+        file="${file#$source_dir/}"
+
+        # skip changes to the git repo or anything already ignored
+        [[ "$file" == .git/* ]] && continue
+        [ -z "$(git status --porcelain | grep "$file")" ] && continue
+
+        # skip queued notifications that have already been processed
+        if [ $last_copy -gt $timestamp ]; then
+            status "(old) $file"
+            continue
+        fi
+
+        status "$file changed"
+
+        # there may be multiple file changes happening, 
+        # allow them to complete before committing
+        sleep $sleep_before_commit
+
+        [ -n "$repo_dir" ] && copy_files_to_repo
+        commit_changes
+
+        last_copy=$(date +%s)
+    done < <( fswatch -tf'%s' "$source_dir" )
+}
+
+function check_for_tools {
+    need git
+    need fswatch
+}
+
+function need {
+    if ! type "$1" &>/dev/null; then
+        echo "$1: required tool not found, aborting."
+        exit 3
+    fi
+}
+
+function check_is_repo {
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo "Error with '${using}'"
+        echo ''
+        echo "This directory is not a git repository."
+        exit 1
+    fi
+}
+
+function copy_files_to_repo {
+    rsync \
+        --archive \
+        --hard-links \
+        --itemize-changes \
+        --inplace \
+        --delete \
+        --exclude ".git" \
+            "$source_dir/." \
+            .
+}
+
+function commit_changes {
+    if [ -n "$(git status --porcelain)" ]; then
+        git add --all
+
+        status "git commit"
+        num_changed=$(git status --porcelain | wc | awk '{ print $1 }')
+        if [ $num_changed = 1 ]; then
+            file=$(git status --porcelain | cut -c4-)
+            git commit --message "${file} changed"
+        else
+            git commit --message "${num_changed} files changed"
+        fi
+
+        status "git push"
+        git push $remote $branch
+    fi
+}
+
+function status {
+    local bold="\e[1m"
+    local green="\e[32m"
+    local reset="\e[0m"
+    printf "${bold}== ${green}${1}${reset}\n"
+}
+
+function pushd_silent {
+    pushd "$1" >/dev/null
+}
+
+while getopts "b:hr:s:" option; do
+    case $option in
+        b)  branch=$OPTARG ;;
+        h)  exec perldoc -T $0 ;;
+        r)  remote=$OPTARG ;;
+        s)  sleep_before_commit="$OPTARG" ;;
+    esac
+done
+shift $(( OPTIND -1 ))
+
+[ "$#" -lt 1 ] && exec pod2usage $0
+
+source_dir="$1"
+repo_dir="${2:-}"
+main
+exit 0
+
+
+=pod
+
+=head1 NAME
+
+B<autogit> - git commit and push directory changes
+
+=head1 SYNOPSIS
+
+B<autogit> [-h] [-b branch] [-r remote] [-s sleep] source_dir [repo_dir]
+
+Watch I<source_dir> for changes, optionally copy them to I<repo_dir>, 
+then commit them to git and push to a remote.
+
+=head1 OPTIONS
+
+=over
+
+=item B<-h>
+
+print full help text
+
+=item B<-b> I<branch>
+
+use I<branch> as the remote branch to push to. Defaults to C<main>.
+
+=item B<-r> I<remote>
+
+use I<remote> as the remote target to push to. Defaults to C<origin>.
+
+=item B<-s> I<seconds>
+
+sleep for I<seconds> before trying to copy/commit. Defaults to C<10>.
+Set to C<0> if not desired.
+
+Using this allows multiple changes happening in short succession to be bundled
+into one commit. For example, an application that changes multiple files as
+part of a save operation, but takes a few seconds before complete.
+
+=back
