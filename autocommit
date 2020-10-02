@@ -6,6 +6,8 @@ latency=4.0
 remote=origin
 branch=main
 verbose=0
+timeout=0
+LAST_CHANGE=$(mktemp /tmp/autocommit.timestamp.XXXXX)
 
 
 function main {
@@ -32,7 +34,8 @@ function main {
         fi
 
         [ -n "$repo_dir" ] && copy_files_to_repo
-        commit_changes
+        touch $LAST_CHANGE
+        commit_changes $(last_change) &
 
         last_copy=$(date +%s)
     done < <( fswatch -tf'%s' --latency 30.0 "$source_dir" )
@@ -72,21 +75,35 @@ function copy_files_to_repo {
 }
 
 function commit_changes {
-    if [ -n "$(git status --porcelain)" ]; then
-        git add --all
+    timestamp=$1
 
-        status "git commit"
-        num_changed=$(git status --porcelain | wc | awk '{ print $1 }')
-        if [ $num_changed = 1 ]; then
-            file=$(git status --porcelain | cut -c4-)
-            git commit --message "${file} changed"
+    status "waiting $timeout to commit" verbose
+    sleep $timeout
+    if [ $(last_change) = $timestamp ]; then
+        if [ -n "$(git status --porcelain)" ]; then
+            git add --all
+
+            status "git commit"
+            num_changed=$(git status --porcelain | wc | awk '{ print $1 }')
+            if [ $num_changed = 1 ]; then
+                file=$(git status --porcelain | cut -c4-)
+                git commit --message "${file} changed"
+            else
+                git commit --message "${num_changed} files changed"
+            fi
+
+            status "git push"
+            git push $remote $branch
         else
-            git commit --message "${num_changed} files changed"
+            status "no changes to commit" verbose
         fi
-
-        status "git push"
-        git push $remote $branch
+    else
+        status "changed since commit queued" verbose
     fi
+}
+
+function last_change {
+    stat -f'%m' $LAST_CHANGE
 }
 
 function status {
@@ -107,12 +124,13 @@ function pushd_silent {
     pushd "$1" >/dev/null
 }
 
-while getopts "b:hl:r:v" option; do
+while getopts "b:hl:r:t:v" option; do
     case $option in
         b)  branch=$OPTARG ;;
         h)  exec perldoc -T $0 ;;
         l)  latency=$OPTARG ;;
         r)  remote=$OPTARG ;;
+        t)  timeout=$OPTARG ;;
         v)  verbose=1 ;;
     esac
 done
@@ -154,13 +172,22 @@ use I<branch> as the remote branch to push to. Defaults to C<main>.
 =item B<-l> I<latency>
 
 use I<latency> as the latency for fswatch (how long between batches of
-notifications). Default is 4.0. Larger values are useful when multiple
-sizeable files are changed as part of a single operation (eg saving
-binary files).
+notifications). Default is 4.0.
+
+Larger values are useful when multiple sizeable files are changed as part of a
+single operation (eg saving binary files).
 
 =item B<-r> I<remote>
 
 use I<remote> as the remote target to push to. Defaults to C<origin>.
+
+=item B<-t> I<timeout>
+
+wait I<timeout> seconds before committing, to see if any further
+changes occur. Default is 0.
+
+Larger values mean fewer commits when a quick burst of changes happen. Too
+large a value may mean never committing if the files are in constant use.
 
 =item B<-v>
 
