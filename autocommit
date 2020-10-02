@@ -19,6 +19,11 @@ function main {
     pushd_silent "$using"
     check_is_repo
 
+    status "waiting for changes" verbose
+    status "fswatch latency=$latency timeout=$timeout" verbose
+    status "source=$source_dir" verbose
+    [ -n "$repo_dir" ] && status "repo=$repo_dir" verbose
+
     while read timestamp file; do
         file="${file#$source_dir/}"
 
