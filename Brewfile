@@ -1,1 +1,2 @@
-fswatch
+brew 'coreutils'
+brew 'fswatch'

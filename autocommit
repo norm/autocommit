@@ -44,6 +44,7 @@ function main {
 function check_for_tools {
     need git
     need fswatch
+    need realpath
 }
 
 function need {
@@ -138,8 +139,9 @@ shift $(( OPTIND -1 ))
 
 [ "$#" -lt 1 ] && exec pod2usage $0
 
-source_dir="$1"
-repo_dir="${2:-}"
+source_dir="$(realpath "$1")"
+repo_dir=''
+[ -n "${2:-}" ] && repo_dir="$(realpath "$2")"
 main
 exit 0
 
