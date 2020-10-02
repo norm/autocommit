@@ -38,7 +38,7 @@ function main {
         commit_changes $(last_change) &
 
         last_copy=$(date +%s)
-    done < <( fswatch -tf'%s' --latency 30.0 "$source_dir" )
+    done < <( fswatch -tf'%s' --latency $latency "$source_dir" )
 }
 
 function check_for_tools {
